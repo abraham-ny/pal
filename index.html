@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAL AI Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        .chat-container {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 400px;
+            height: 600px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+        
+        .chat-header {
+            padding: 20px;
+            background: rgba(102, 126, 234, 0.3);
+            border-radius: 20px 20px 0 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .chat-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+        
+        .message.user {
+            align-self: flex-end;
+            background: #667eea;
+            color: white;
+        }
+        
+        .message.assistant {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .chat-input-container {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .chat-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-size: 14px;
+            resize: none;
+        }
+        
+        .chat-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .send-button {
+            margin-top: 10px;
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .send-button:hover {
+            background: #764ba2;
+        }
+        
+        .send-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        
+        .settings-panel {
+            position: fixed;
+            left: 20px;
+            top: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 12px;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+            max-width: 350px;
+        }
+        
+        .settings-panel h3 {
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-size: 14px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            margin-right: 8px;
+        }
+        
+        .status-indicator.disconnected {
+            background: #ef4444;
+        }
+        
+        .toggle-settings {
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.85);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            z-index: 10;
+        }
+        
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="settings-panel" id="settingsPanel">
+        <h3>
+            <span class="status-indicator" id="statusIndicator"></span>
+            Settings
+        </h3>
+        <div class="input-group">
+            <label>Backend URL</label>
+            <input type="text" id="backendUrl" value="http://localhost:5000" placeholder="https://your-backend.onrender.com">
+        </div>
+        <div class="input-group">
+            <label>OpenAI API Key</label>
+            <input type="password" id="apiKey" placeholder="sk-...">
+        </div>
+        <div class="input-group">
+            <label>Model</label>
+            <select id="model">
+                <option value="gpt-4">GPT-4</option>
+                <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label>
+                <input type="checkbox" id="ttsEnabled"> Enable Text-to-Speech
+            </label>
+        </div>
+    </div>
+    
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>Chat with PAL</h2>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                Hello! I'm PAL, your AI assistant. How can I help you today?
+            </div>
+        </div>
+        <div class="chat-input-container">
+            <textarea 
+                id="chatInput" 
+                class="chat-input" 
+                placeholder="Type your message..."
+                rows="3"
+            ></textarea>
+            <button class="send-button" id="sendButton">Send</button>
+        </div>
+    </div>
+    
+    <button class="toggle-settings" onclick="toggleSettings()">⚙️ Settings</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // PAL Face Class (same as before)
+        class PALFace {
+            constructor() {
+                this.currentExpression = 'neutral';
+                this.isTalking = false;
+                this.talkingSpeed = 0.15;
+                this.blinkTimer = 0;
+                
+                this.expressions = {
+                    neutral: { eyeHeight: 1.0, eyeWidth: 1.0, mouthCurve: 0, mouthOpen: 0.1, eyebrowAngle: 0 },
+                    happy: { eyeHeight: 0.7, eyeWidth: 1.0, mouthCurve: -0.4, mouthOpen: 0.2, eyebrowAngle: 0.1 },
+                    excited: { eyeHeight: 1.3, eyeWidth: 1.3, mouthCurve: -0.6, mouthOpen: 0.35, eyebrowAngle: 0.3 },
+                    sad: { eyeHeight: 0.8, eyeWidth: 0.9, mouthCurve: 0.3, mouthOpen: 0.08, eyebrowAngle: -0.25 },
+                    angry: { eyeHeight: 0.6, eyeWidth: 0.85, mouthCurve: 0.2, mouthOpen: 0.12, eyebrowAngle: -0.4 },
+                    surprised: { eyeHeight: 1.5, eyeWidth: 1.4, mouthCurve: 0, mouthOpen: 0.5, eyebrowAngle: 0.4 },
+                    thinking: { eyeHeight: 0.9, eyeWidth: 0.95, mouthCurve: -0.15, mouthOpen: 0.08, eyebrowAngle: 0.15 },
+                    concerned: { eyeHeight: 1.0, eyeWidth: 1.0, mouthCurve: 0.1, mouthOpen: 0.1, eyebrowAngle: -0.2 }
+                };
+                
+                this.currentState = { eyeHeight: 1.0, eyeWidth: 1.0, mouthCurve: 0, mouthOpen: 0.1, eyebrowAngle: 0 };
+                this.targetState = { eyeHeight: 1.0, eyeWidth: 1.0, mouthCurve: 0, mouthOpen: 0.1, eyebrowAngle: 0 };
+                
+                this.init();
+                this.createFace();
+                this.animate();
+            }
+            
+            init() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setClearColor(0x000000, 0);
+                this.camera.position.z = 8;
+                
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                this.scene.add(ambientLight);
+                const pointLight = new THREE.PointLight(0xffffff, 0.6);
+                pointLight.position.set(10, 10, 10);
+                this.scene.add(pointLight);
+                
+                window.addEventListener('resize', () => this.onResize());
+            }
+            
+            createFace() {
+                this.leftEye = this.createEye(-1.2, 0.8);
+                this.rightEye = this.createEye(1.2, 0.8);
+                this.leftEyebrow = this.createEyebrow(-1.2, 1.6);
+                this.rightEyebrow = this.createEyebrow(1.2, 1.6);
+                this.mouth = this.createMouth();
+            }
+            
+            createEye(x, y) {
+                const eyeGroup = new THREE.Group();
+                const eyeShape = new THREE.Shape();
+                eyeShape.ellipse(0, 0, 0.5, 0.7, 0, Math.PI * 2, false, 0);
+                const eyeGeometry = new THREE.ShapeGeometry(eyeShape);
+                const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const eyeWhite = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                eyeGroup.add(eyeWhite);
+                
+                const pupilGeometry = new THREE.CircleGeometry(0.25, 32);
+                const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+                pupil.position.z = 0.01;
+                eyeGroup.add(pupil);
+                
+                const highlightGeometry = new THREE.CircleGeometry(0.1, 32);
+                const highlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
+                highlight.position.set(0.1, 0.1, 0.02);
+                eyeGroup.add(highlight);
+                
+                eyeGroup.position.set(x, y, 0);
+                this.scene.add(eyeGroup);
+                return { group: eyeGroup, white: eyeWhite, pupil: pupil };
+            }
+            
+            createEyebrow(x, y) {
+                const browGroup = new THREE.Group();
+                const browCurve = new THREE.QuadraticBezierCurve3(
+                    new THREE.Vector3(-0.6, 0, 0),
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0.6, 0, 0)
+                );
+                const points = browCurve.getPoints(30);
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 4 });
+                const line = new THREE.Line(geometry, material);
+                browGroup.add(line);
+                browGroup.position.set(x, y, 0);
+                this.scene.add(browGroup);
+                browGroup.userData.line = line;
+                return browGroup;
+            }
+            
+            createMouth() {
+                const mouthGroup = new THREE.Group();
+                const curve = new THREE.QuadraticBezierCurve3(
+                    new THREE.Vector3(-1.0, 0, 0),
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(1.0, 0, 0)
+                );
+                const points = curve.getPoints(50);
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 5 });
+                const line = new THREE.Line(geometry, material);
+                mouthGroup.add(line);
+                mouthGroup.position.set(0, -1.2, 0);
+                this.scene.add(mouthGroup);
+                mouthGroup.userData.line = line;
+                return mouthGroup;
+            }
+            
+            updateMouth(curve, openAmount) {
+                const newCurve = new THREE.QuadraticBezierCurve3(
+                    new THREE.Vector3(-1.0, 0, 0),
+                    new THREE.Vector3(0, curve, 0),
+                    new THREE.Vector3(1.0, 0, 0)
+                );
+                const points = newCurve.getPoints(50);
+                this.mouth.userData.line.geometry.setFromPoints(points);
+            }
+            
+            updateEyebrow(eyebrow, angle) {
+                const curve = new THREE.QuadraticBezierCurve3(
+                    new THREE.Vector3(-0.6, 0, 0),
+                    new THREE.Vector3(0, angle, 0),
+                    new THREE.Vector3(0.6, 0, 0)
+                );
+                const points = curve.getPoints(30);
+                eyebrow.userData.line.geometry.setFromPoints(points);
+            }
+            
+            setExpression(expressionName) {
+                if (this.expressions[expressionName]) {
+                    this.currentExpression = expressionName;
+                    this.targetState = { ...this.expressions[expressionName] };
+                }
+            }
+            
+            startTalking() { this.isTalking = true; }
+            stopTalking() { this.isTalking = false; }
+            
+            lerp(start, end, factor) {
+                return start + (end - start) * factor;
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                const lerpFactor = 0.1;
+                
+                this.currentState.eyeHeight = this.lerp(this.currentState.eyeHeight, this.targetState.eyeHeight, lerpFactor);
+                this.currentState.eyeWidth = this.lerp(this.currentState.eyeWidth, this.targetState.eyeWidth, lerpFactor);
+                this.currentState.mouthCurve = this.lerp(this.currentState.mouthCurve, this.targetState.mouthCurve, lerpFactor);
+                this.currentState.mouthOpen = this.lerp(this.currentState.mouthOpen, this.targetState.mouthOpen, lerpFactor);
+                this.currentState.eyebrowAngle = this.lerp(this.currentState.eyebrowAngle, this.targetState.eyebrowAngle, lerpFactor);
+                
+                this.leftEye.white.scale.y = this.currentState.eyeHeight;
+                this.rightEye.white.scale.y = this.currentState.eyeHeight;
+                this.leftEye.white.scale.x = this.currentState.eyeWidth;
+                this.rightEye.white.scale.x = this.currentState.eyeWidth;
+                
+                this.updateEyebrow(this.leftEyebrow, this.currentState.eyebrowAngle);
+                this.updateEyebrow(this.rightEyebrow, this.currentState.eyebrowAngle);
+                
+                let mouthCurve = this.currentState.mouthCurve;
+                if (this.isTalking) {
+                    const talkPhase = Math.sin(Date.now() * this.talkingSpeed) * 0.2;
+                    mouthCurve += talkPhase;
+                }
+                this.updateMouth(mouthCurve, this.currentState.mouthOpen);
+                
+                this.blinkTimer += 0.016;
+                if (this.blinkTimer > 3 + Math.random() * 2) {
+                    this.blink();
+                    this.blinkTimer = 0;
+                }
+                
+                const idleOffset = Math.sin(Date.now() * 0.0008) * 0.1;
+                this.leftEye.group.position.y = 0.8 + idleOffset;
+                this.rightEye.group.position.y = 0.8 + idleOffset;
+                this.leftEyebrow.position.y = 1.6 + idleOffset;
+                this.rightEyebrow.position.y = 1.6 + idleOffset;
+                this.mouth.position.y = -1.2 + idleOffset;
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            blink() {
+                const blinkDuration = 150;
+                const originalScaleY = this.currentState.eyeHeight;
+                this.leftEye.white.scale.y = 0.1;
+                this.rightEye.white.scale.y = 0.1;
+                setTimeout(() => {
+                    this.leftEye.white.scale.y = originalScaleY;
+                    this.rightEye.white.scale.y = originalScaleY;
+                }, blinkDuration);
+            }
+            
+            onResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+        
+        // Initialize PAL
+        const face = new PALFace();
+        
+        // Chat functionality
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+        const apiKeyInput = document.getElementById('apiKey');
+        const backendUrlInput = document.getElementById('backendUrl');
+        const modelSelect = document.getElementById('model');
+        const ttsEnabledCheckbox = document.getElementById('ttsEnabled');
+        const statusIndicator = document.getElementById('statusIndicator');
+        
+        let conversationHistory = [];
+        let userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        
+        // Load settings from localStorage
+        apiKeyInput.value = localStorage.getItem('apiKey') || '';
+        backendUrlInput.value = localStorage.getItem('backendUrl') || 'http://localhost:5000';
+        modelSelect.value = localStorage.getItem('model') || 'gpt-4';
+        
+        // Save settings
+        apiKeyInput.addEventListener('change', () => localStorage.setItem('apiKey', apiKeyInput.value));
+        backendUrlInput.addEventListener('change', () => localStorage.setItem('backendUrl', backendUrlInput.value));
+        modelSelect.addEventListener('change', () => localStorage.setItem('model', modelSelect.value));
+        
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function addMessage(content, role) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.textContent = content;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            const apiKey = apiKeyInput.value.trim();
+            const backendUrl = backendUrlInput.value.trim();
+            
+            if (!apiKey) {
+                alert('Please enter your OpenAI API key in settings');
+                return;
+            }
+            
+            // Add user message
+            addMessage(message, 'user');
+            chatInput.value = '';
+            sendButton.disabled = true;
+            
+            // Show thinking expression
+            face.setExpression('thinking');
+            
+            try {
+                statusIndicator.classList.remove('disconnected');
+                
+                const response = await fetch(`${backendUrl}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        api_key: apiKey,
+                        model: modelSelect.value,
+                        history: conversationHistory,
+                        user_id: userId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Update conversation history
+                conversationHistory.push(
+                    { role: 'user', content: message },
+                    { role: 'assistant', content: data.response }
+                );
+                
+                // Add AI response
+                addMessage(data.response, 'assistant');
+                
+                // Set expression
+                face.setExpression(data.expression);
+                
+                // Text-to-speech
+                if (ttsEnabledCheckbox.checked) {
+                    await speakText(data.response, apiKey, backendUrl);
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('Sorry, there was an error connecting to the server.', 'assistant');
+                statusIndicator.classList.add('disconnected');
+                face.setExpression('concerned');
+            } finally {
+                sendButton.disabled = false;
+                chatInput.focus();
+            }
+        }
+        
+        async function speakText(text, apiKey, backendUrl) {
+            try {
+                face.startTalking();
+                
+                const response = await fetch(`${backendUrl}/api/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        api_key: apiKey
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Convert base64 to audio and play
+                const audioData = atob(data.audio);
+                const audioArray = new Uint8Array(audioData.length);
+                for (let i = 0; i < audioData.length; i++) {
+                    audioArray[i] = audioData.charCodeAt(i);
+                }
+                const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                audio.onended = () => {
+                    face.stopTalking();
+                    URL.revokeObjectURL(audioUrl);
+                };
+                
+                await audio.play();
+                
+            } catch (error) {
+                console.error('TTS Error:', error);
+                face.stopTalking();
+            }
+        }
+        
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // Check backend health on load
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${backendUrlInput.value}/health`);
+                if (response.ok) {
+                    statusIndicator.classList.remove('disconnected');
+                } else {
+                    statusIndicator.classList.add('disconnected');
+                }
+            } catch {
+                statusIndicator.classList.add('disconnected');
+            }
+        }
+        
+        checkHealth();
+        setInterval(checkHealth, 30000);
+    </script>
+</body>
+</html>
